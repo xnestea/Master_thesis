@@ -1,3 +1,23 @@
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install("TCGAbiolinks", version = "3.8")
+
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install("SummarizedExperiment", version = "3.8")
+
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install("DESeq2", version = "3.8")
+
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install("biomaRt", version = "3.8")
+
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install("piano", version = "3.8")
+
 library(DESeq2)
 library(TCGAbiolinks)
 library(dplyr)
@@ -7,7 +27,12 @@ library(biomaRt)
 library(piano)
 library(stringr)
 
+
+### set correct directory!!!!
 setwd("C:/Users/xnestea/Documents/Master")
+
+
+### RETRIEVE BARCODES FOR RESPECTIVE SUBSPECIES
 ### download TCGA data
 query <- GDCquery(project = "TCGA-KIRC",
                   data.category = "Transcriptome Profiling",
@@ -18,7 +43,7 @@ query <- GDCquery(project = "TCGA-KIRC",
 GDCdownload(query)
 data <- GDCprepare(query)
 
-### save barcodes related to given groups for later use in DE 
+### MAP TCGA SUBTYPES WITH CCA AND CCB
 ccA_sample <- data$barcode[which(data$subtype_mRNA_cluster == 1)]
 ccB_sample <- data$barcode[which(data$subtype_mRNA_cluster %in% c(2,3))]
 
@@ -27,6 +52,8 @@ a <- data.frame("barcode" = ccA_sample, "type" = c("ccA"))
 b <- data.frame("barcode" = ccB_sample, "type" = c("ccB"))
 DS <- rbind(a, b)
 
+
+### GET EXPRESSION DATA FROM TCGA AND FORMAT IT FOR DE
 ### get TCGA data but in reasonable format I can actualy work on
 df <- GDCprepare(query, 
                  save=TRUE,
@@ -38,11 +65,24 @@ df2 <- df[,-1]
 rownames(df2) <- df[,1]
 df2 <- df2[-(1:5), , drop = FALSE]
 
+### as matrix to get numeric values for DE
+counts <- as.matrix(df2)
+
 ### select samples we are interested in
 df2 <- subset(df2, select = c(ccA_sample, ccB_sample))
 
-### as matrix to get numeric values for DE
-counts <- as.matrix(df2)
+### CONVERT ENSEMBLE IDS INTO GENE SUMBOLS AND SELECT ONLY PROTEIN CODING GENES
+ensembl <- useMart("ensembl", dataset="hsapiens_gene_ensembl")
+
+map_gene = getBM(attributes=c('ensembl_gene_id',"transcript_biotype",'external_gene_name'), filters = "ensembl_gene_id", values=rownames(df), mart=ensembl)
+map_gene = map_gene[which(map_gene$transcript_biotype=="protein_coding"),]
+colnames(map_gene)[colnames(map_gene)=="external_gene_name"] <- "Gene"
+map_gene$Gene <- toupper(map_gene$Gene)
+rownames(map_gene) <- map_gene[,1]
+map_gene[,1] <- NULL
+map_gene[,1] <- NULL
+
+
 
 ### perform DESeq and write the output into file
 deseq <- DESeqDataSetFromMatrix(countData=counts, colData=DS, design= ~type)
@@ -73,7 +113,7 @@ write.table(DE_up_reg , file = "C:/Users/xnestea/Documents/Master/Data/deseq_TCG
 ### map ensembl ids to gene sy
 ensembl <- useMart("ensembl", dataset="hsapiens_gene_ensembl")
 
-prot_id = getBM(attributes=c('ensembl_gene_id',"transcript_biotype",'external_gene_name'), filters = "ensembl_gene_id", values=rownames(df), mart=ensembl)
+prot_id = getBM(attributes=c('ensembl_gene_id',"transcript_biotype",'external_gene_name', 'external_gene_name'), filters = "ensembl_gene_id", values=rownames(df), mart=ensembl)
 prot_id = prot_id[which(prot_id$transcript_biotype=="protein_coding"),]
 map_gene <- prot_id
 map_gene <- getBM(attributes=c('ensembl_gene_id',
