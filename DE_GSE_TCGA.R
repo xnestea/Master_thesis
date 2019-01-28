@@ -50,8 +50,10 @@ ccB_sample <- data$barcode[which(data$subtype_mRNA_cluster %in% c(2,3))]
 ### formating
 a <- data.frame("barcode" = ccA_sample, "type" = c("ccA"))
 b <- data.frame("barcode" = ccB_sample, "type" = c("ccB"))
+### metadata file.
 DS <- rbind(a, b)
-
+rownames(DS) <- DS$barcode
+DS[,1] <- NULL
 
 ### GET EXPRESSION DATA FROM TCGA AND FORMAT IT FOR DE
 ### get TCGA data but in reasonable format I can actualy work on
@@ -62,90 +64,69 @@ df <- GDCprepare(query,
 
 ### make rownames and drop first 5 lines -> data about the quality
 df2 <- df[,-1]
-rownames(df2) <- df[,1]
+### set correct rownames and cut the endings of ensembl entries to be compatible with next step
+rownames(df2) <- str_replace(df[,1],
+                             pattern = ".[0-9]+$",
+                             replacement = "")
 df2 <- df2[-(1:5), , drop = FALSE]
-
-### as matrix to get numeric values for DE
-counts <- as.matrix(df2)
-
 ### select samples we are interested in
-df2 <- subset(df2, select = c(ccA_sample, ccB_sample))
+df2 <- df2[, rownames(DS)]
 
 ### CONVERT ENSEMBLE IDS INTO GENE SUMBOLS AND SELECT ONLY PROTEIN CODING GENES
+### Retreive human genes from ensembl
 ensembl <- useMart("ensembl", dataset="hsapiens_gene_ensembl")
-
-map_gene = getBM(attributes=c('ensembl_gene_id',"transcript_biotype",'external_gene_name'), filters = "ensembl_gene_id", values=rownames(df), mart=ensembl)
+### for all ensemble genes in dataframe add information about transcript biotype and gene symbol
+map_gene = getBM(attributes=c('ensembl_gene_id',"transcript_biotype",'external_gene_name'), filters = "ensembl_gene_id", values=rownames(df2), mart=ensembl)
+### select only protein coding genes
 map_gene = map_gene[which(map_gene$transcript_biotype=="protein_coding"),]
+### change name of column
 colnames(map_gene)[colnames(map_gene)=="external_gene_name"] <- "Gene"
-map_gene$Gene <- toupper(map_gene$Gene)
+#map_gene$Gene <- toupper(map_gene$Gene)
+### set correct rownames
 rownames(map_gene) <- map_gene[,1]
-map_gene[,1] <- NULL
-map_gene[,1] <- NULL
+### remove redundand columns
+map_gene[,c(1,2)] <- NULL
+### make a new row in DE table for respective Gene symbol 
+df3<- merge(df2, map_gene, by = "row.names", all.x=TRUE)
+### remove rows for which no gene symbols is available
+df3 <- df3[!is.na(df3$Gene),]
+### remove rows with same gene symbols
+df3 <- df3[!duplicated(df3$Gene),]
+###Gene symbols are now row names, replacing Ensembl entries
+row.names(df3) <- df3$Gene
+### remove redundand columns
+df3[,c("Gene","Row.names")] <- NULL
+### as matrix to get numeric values for DE
+df3 <- as.matrix(df3)
+
+#write.table(df3, file = "C:/Users/xnestea/Documents/Master/Data/HT_seq_counts.txt", sep = "\t")
 
 
-
-### perform DESeq and write the output into file
-deseq <- DESeqDataSetFromMatrix(countData=counts, colData=DS, design= ~type)
+### DE ANALYSIS
+### DE analysis
+deseq <- DESeqDataSetFromMatrix(countData=df3, colData=DS, design= ~type)
 deseq <- DESeq(deseq)
+resultsNames(deseq)
 res <- results(deseq)
-df <- as.data.frame(res)
-df <- df[complete.cases(df), ]
-DE_down_reg <- df[df$log2FoldChange < 0,]
+### formating saving as data frame and removing rows containing NA
+DE <- as.data.frame(res)
+DE <- DE[complete.cases(DE), ]
+### select significantly down regulated genes
+DE_down_reg <- DE[DE$log2FoldChange < 0,]
 DE_down_reg <- DE_down_reg[DE_down_reg$padj < 0.05,]
-
-DE_up_reg <- df[df$log2FoldChange > 0,]
+### select significantly up regulated genes
+DE_up_reg <- DE[DE$log2FoldChange > 0,]
 DE_up_reg <- DE_up_reg[DE_up_reg$padj < 0.05,]
-rownames(df) <- str_replace(rownames(df),
-                                   pattern = ".[0-9]+$",
-                                   replacement = "")
-rownames(DE_up_reg) <- str_replace(rownames(DE_up_reg),
-                            pattern = ".[0-9]+$",
-                            replacement = "")
-rownames(DE_down_reg) <- str_replace(rownames(DE_down_reg),
-                            pattern = ".[0-9]+$",
-                            replacement = "")
-
-rownames(DE_up_reg)
-
-write.table(df, file = "C:/Users/xnestea/Documents/Master/Data/deseq_TCGA_ccAccB.txt", sep = "\t")
+### save files for further analysis
+write.table(DE, file = "C:/Users/xnestea/Documents/Master/Data/deseq_TCGA_ccAccB_protcoding.txt", sep = "\t")
 write.table(DE_down_reg, file = "C:/Users/xnestea/Documents/Master/Data/deseq_TCGA_DE_down_reg.txt", sep = "\t")
 write.table(DE_up_reg , file = "C:/Users/xnestea/Documents/Master/Data/deseq_TCGA_DE_up_reg.txt", sep = "\t")
-### map ensembl ids to gene sy
-ensembl <- useMart("ensembl", dataset="hsapiens_gene_ensembl")
 
-prot_id = getBM(attributes=c('ensembl_gene_id',"transcript_biotype",'external_gene_name', 'external_gene_name'), filters = "ensembl_gene_id", values=rownames(df), mart=ensembl)
-prot_id = prot_id[which(prot_id$transcript_biotype=="protein_coding"),]
-map_gene <- prot_id
-map_gene <- getBM(attributes=c('ensembl_gene_id',
-                               'external_gene_name'),
-                  mart = ensembl)
-colnames(map_gene)[colnames(map_gene)=="external_gene_name"] <- "Gene"
-map_gene$Gene <- toupper(map_gene$Gene)
-rownames(map_gene) <- map_gene[,1]
-map_gene[,1] <- NULL
-map_gene[,1] <- NULL
-
-
+### GENE SET ENRICHMENT ANALYSIS (GSEA)
 ### genesets downloaded from go2msig
 gset=loadGSC("Data/Homo_sapiens_GSEA_GO_sets_bp_symbols_April_2015.gmt")
-DE=df[ ,c('log2FoldChange','pvalue')]
-rownames(DE) <- str_replace(rownames(DE),
-                      pattern = ".[0-9]+$",
-                      replacement = "")
-### make a new row in DE table for respective Gene symbol 
-DE[,"Gene"] <- map_gene[row.names(DE), "Gene"]
-
-### remove rows for which no gene symbols is available
-DE <- DE[!is.na(DE$Gene),]
-
-### remove rows with same gene symbols
-DE <- DE[!duplicated(DE$Gene),]
-
-###Gene symbols are now row names, replacing Ensembl entries
-row.names(DE) <- DE$Gene
-
-### we only need logfoldchange and pvalue as piano input
-DE <- DE[ ,c('log2FoldChange','pvalue')] 
+### only those two values are necessary
+DE<- DE[ ,c('log2FoldChange','pvalue')]
 
 ### make both logdfoldchange and p values as separate matrices
 ### with Genesymbols and rownames
@@ -157,6 +138,5 @@ row.names(lfc) <- row.names(DE)
 gsaRes <- runGSA(pval,lfc,gsc=gset, nPerm = 10000, adjMethod = "fdr")
 GSAsummaryTable(gsaRes, save = TRUE, file = "Data/TCGA_GSEA_ccA_ccB_all.txt")
 
-is.recursive(gsaRes)
-
+### generate a heatmap depicting the results
 GSAheatmap(gsaRes, cutoff=25, adjusted=TRUE, ncharLabel=75, cellnote="none", columnnames="full", colorkey=TRUE, colorgrad=NULL, cex=0.4)
