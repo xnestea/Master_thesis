@@ -1,4 +1,4 @@
-setwd("/home/xnestea/Master/bin")
+setwd("/home/xnestea/Master/bin/Merged_MAD")
 
 r = getOption("repos")
 r["CRAN"] = "http://cran.us.r-project.org"
@@ -7,9 +7,8 @@ options(repos = r)
 install.packages("NMF")
 library(NMF)
 
-load("../bin/prep_exp_TCGA.Rdata")
+load("Exp_TCGA.Rdata")
 estim.r <- nmf(exp, 2:8, nrun = 50, .options = "v", .pbackend="mpi")
-plot_coef <- plot(estim.r)
 #consensusmap(estim.r)
 
-save.image(file = "k_estimation_TCGA.Rdata")
+save(estim.r, file = "k_estimation_TCGA.Rdata")
