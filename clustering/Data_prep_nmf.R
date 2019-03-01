@@ -1,5 +1,7 @@
 setwd("Master/bin/")
 
+####### PREPARE DATA FOR NMF ANALYSIS AND CLUSTERING
+
 load("../Data/Japanese data/exp_tpm_gene_level.Rdata")
 load("../Data/TCGA data/uni_transcript_tpm_exp_clinical_add1.Rdata")
 load("TPM/map_gene.Rdata")

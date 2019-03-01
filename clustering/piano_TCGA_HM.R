@@ -1,6 +1,10 @@
 #setwd("C:/Users/kajetan.juszczak/Documents/Master/Results/Merged_MAD/Deseq/TCGA/")
 setwd("/home/xnestea/Master/Results/Merged_MAD/Deseq/TCGA/")
 
+
+##### USES HALMARK GENE SETS INSTEAD OF NORMAL ONES
+
+
 if (!requireNamespace("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 BiocManager::install("piano", version = "3.8")

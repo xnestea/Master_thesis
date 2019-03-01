@@ -1,6 +1,10 @@
 setwd("C:/Users/kajetan.juszczak/Documents/Master/bin/")
 load("./Merged_MAD/model_JP.Rdata")
 
+
+##### CHECK CORRELATION WITH CCA CCB
+
+
 JP_clus <- read.csv("../Data/ng.2699-S2.csv")
 rownames(JP_clus) <- JP_clus$Supplementary.table.1..Characteristics.of.the.patinets
 JP_clus <- JP_clus[which(JP_clus$X.11 == "ccA" | JP_clus$X.11 == "ccB" ),]

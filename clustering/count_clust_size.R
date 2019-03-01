@@ -2,6 +2,9 @@ library(stringr)
 library(NMF)
 library(plyr)
 
+###### VERY SIMPLE SCRIPT TO COUNT THE NUMBER OF SAMPLES IN EACH CLUSTER IN EACH DATABASE
+###### PRINTS COUNTS FOR RESPECTIVE CLUSTERS
+
 
 setwd("c:/Users/kajetan.juszczak/Documents/Master/")
 ### load NMF model
